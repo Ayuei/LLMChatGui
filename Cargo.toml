@@ -1,0 +1,48 @@
+[package]
+name = "ChatBotGui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+llm = { git = "https://github.com/rustformers/llm.git"}
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+flume = "*"
+rand = "*"
+async-std = "*"
+thiserror = "*"
+log = "*"
+anyhow = "*"
+env_logger = "*"
+egui = "0.22.0"
+epaint = "0.22.0"
+eframe = {version = "0.22.0", features=["persistence"]}
+partial-min-max = "*"
+serde = "*"
+serde_json = "*"
+chrono = "*"
+
+[features]
+cublas = ["llm/cublas"]
+
+[dependencies.serenity]
+default-features = false
+features = [
+      "builder",
+      "chrono",
+      "client",
+      "framework",
+      "gateway",
+      "http",
+      "model",
+      "standard_framework",
+      "utils",
+      "rustls_backend",
+      "cache"
+      ]
+
+version = "0.11"
+
+[profile.dev.package.ggml-sys]
+opt-level = 3
