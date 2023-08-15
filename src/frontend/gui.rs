@@ -42,7 +42,7 @@ pub struct GuiPrompt {
 
 #[derive(Serialize, Deserialize)]
 pub struct ScrollBuffer<T> {
-    internal: Vec<T>,
+    internal: Vec<LayoutJob>,
     flush: String,
 
     #[serde(skip)]
@@ -91,7 +91,7 @@ pub(crate) fn convert_text_to_layout_job(prefix: &str, text: &str, background_co
 }
 
 impl <T> ScrollBuffer<T> where T: Serialize{
-    fn flush_buffer(&self) -> Result<()> {
+    fn flush_buffer(&mut self) -> Result<()> {
             if self.flush.len() > 0 {
                 let job: epaint::text::LayoutJob = convert_text_to_layout_job("User", self.flush.as_str(), USER_COLOUR);
 
@@ -245,12 +245,8 @@ impl ChatGui {
                     }
     
                     if ui.button("Enter").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        self.scroll_buffer.flush()
-                        if self.scroll_buffer.flush.len() > 0 {
-                            let job = convert_text_to_layout_job("Me", self.label.as_str(), crate::ME_COLOUR, self.config.theme);
-    
-                        }
-    
+                        self.scroll_buffer.flush_buffer();
+
                         if !&self.config_open {
                             response.request_focus();
                         }
