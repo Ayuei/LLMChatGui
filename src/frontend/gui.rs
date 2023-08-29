@@ -1,43 +1,31 @@
 // TODO: Add sound?
-use egui::{Color32, FontFamily, FontId};
-use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use chrono::prelude::DateTime;
 use chrono::Local;
+use egui::{Color32, FontFamily, FontId, Align};
 use epaint::text::LayoutJob;
+use serde::{Deserialize, Serialize};
 
-const USER_COLOUR: Color32 = Color32::LIGHT_YELLOW;
-const ASSISTANT_COLOR: Color32 = Color32::LIGHT_RED;
+use super::panels::config::GuiConfig;
+
+const USER_COLOUR: Color32 = Color32::DARK_GRAY;
+const ASSISTANT_COLOR: Color32 = Color32::DARK_GREEN;
+
+#[derive(PartialEq)]
+enum View {
+    Main,
+    Config,
+}
+
+impl Default for View {
+    fn default() -> Self {
+        Self::Main
+    }
+}
 
 pub fn get_current_time() -> String {
     let local: DateTime<Local> = Local::now();
     local.format("%H:%M:%S").to_string()
-}
-
-#[derive(Serialize, Deserialize, Default)]
-pub struct GuiSettings {
-    pub(crate) request_url: String,
-    pub(crate) model_type: ModelListing,
-    pub(crate) prompt: GuiPrompt,
-}
-
-#[derive(Serialize, Deserialize, Default)]
-pub struct ModelListing {
-    pub(crate) base_dir: String,
-}
-
-impl ModelListing {
-    pub fn new() -> ModelListing {
-        return ModelListing {
-            base_dir: ".".into(),
-        };
-    }
-}
-
-#[derive(Serialize, Deserialize, Default)]
-pub struct GuiPrompt {
-    pub(crate) system_prompt: String,
-    pub(crate) user_prompt: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -63,44 +51,65 @@ impl<T> ScrollBuffer<T> {
     }
 }
 
-pub(crate) fn convert_text_to_layout_job(prefix: &str, text: &str, background_color: egui::Color32) -> epaint::text::LayoutJob {
+pub(crate) fn convert_text_to_layout_job(
+    prefix: &str,
+    text: &str,
+    background_color: egui::Color32,
+) -> epaint::text::LayoutJob {
     let mut job = LayoutJob::default();
     let text_color = Color32::WHITE;
 
     job.append(
         format!("[{}]:  ", get_current_time()).as_str(),
         0.0,
-        epaint::text::TextFormat {font_id: FontId::new(14.0, FontFamily::Proportional), color: text_color, ..Default::default()}
+        epaint::text::TextFormat {
+            font_id: FontId::new(14.0, FontFamily::Proportional),
+            color: text_color,
+            ..Default::default()
+        },
     );
 
     if prefix.len() > 0 {
         job.append(
             prefix,
             0.0,
-            epaint::text::TextFormat {font_id: FontId::new(14.0, FontFamily::Proportional), color: text_color, background: background_color, ..Default::default()}
+            epaint::text::TextFormat {
+                font_id: FontId::new(14.0, FontFamily::Proportional),
+                color: text_color,
+                background: background_color,
+                ..Default::default()
+            },
         );
     }
 
     job.append(
         text,
         8.5,
-        epaint::text::TextFormat {font_id: FontId::new(14.0, FontFamily::Proportional), color: text_color, ..Default::default()}
+        epaint::text::TextFormat {
+            font_id: FontId::new(14.0, FontFamily::Proportional),
+            color: text_color,
+            ..Default::default()
+        },
     );
 
     job
 }
 
-impl <T> ScrollBuffer<T> where T: Serialize{
+impl<T> ScrollBuffer<T>
+where
+    T: Serialize,
+{
     fn flush_buffer(&mut self) -> Result<()> {
-            if self.flush.len() > 0 {
-                let job: epaint::text::LayoutJob = convert_text_to_layout_job("User", self.flush.as_str(), USER_COLOUR);
+        if self.flush.len() > 0 {
+            let job: epaint::text::LayoutJob =
+                convert_text_to_layout_job("User", self.flush.as_str(), USER_COLOUR);
 
-                self.internal.push(job);
-                self.flush = String::from("");
-            };
+            self.internal.push(job);
+            self.flush = String::from("");
+        };
 
-            Ok(())
-        }
+        Ok(())
+    }
 }
 
 impl<T> Default for ScrollBuffer<T> {
@@ -116,11 +125,14 @@ impl<T> Default for ScrollBuffer<T> {
 #[derive(Serialize, Deserialize)]
 pub struct ChatGui {
     pub(crate) scroll_buffer: ScrollBuffer<LayoutJob>,
-    pub(crate) gui_settings: GuiSettings,
+    pub(crate) gui_config: GuiConfig,
 
     #[serde(skip)]
     scroll_tx: Option<flume::Sender<LayoutJob>>,
-    config_open: bool,
+    pub(crate) config_open: bool,
+
+    #[serde(skip)]
+    view: View
 }
 
 impl Default for ChatGui {
@@ -130,9 +142,10 @@ impl Default for ChatGui {
 
         ChatGui {
             scroll_buffer,
-            gui_settings: GuiSettings::default(),
+            gui_config: GuiConfig::default(),
             scroll_tx: Some(tx),
             config_open: false,
+            view: View::Main,
         }
     }
 }
@@ -160,37 +173,116 @@ impl ChatGui {
         //    }
         //    None => {
         //        println!("Loaded default");
-        //        
+        //
         //    }
         //}
         ChatGui::default().reload()
     }
 
-    fn top_panel(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {}
+    //fn config_window(&mut self, ui: &mut egui::Ui) {
+    //}
 
-    fn config_window(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let side_padding = 25.0;
-        let top_bottom_padding = 5.0;
+    fn title_bar(&self, ui: &mut egui::Ui) {
+        let mut title = LayoutJob{
+            halign: Align::Center,
+            ..Default::default()
+        };
 
-        let frame = egui::containers::Frame::window(&ctx.style()).inner_margin(egui::style::Margin {
-                left: side_padding.clone(),
-                right: side_padding,
-                top: top_bottom_padding.clone(),
-                bottom: top_bottom_padding,
+        title.append(
+            "LLM Gui",
+            0.0,
+            epaint::text::TextFormat {
+                font_id: FontId::new(20.0, FontFamily::Proportional),
+                color: egui::Color32::RED,
+                ..Default::default()
+            },
+        );
+
+        ui.label(title);
+    }
+
+    fn top_panel(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            // The top panel is often a good place for a menu bar:
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("Options", |ui| {
+                    self.gui_config.local_ui(ui);
+                    //if ui.button("Open").clicked() {
+                    //    if let Some(path) = rfd::FileDialog::new().pick_file() {
+                    //        *label = path.display().to_string();
+                    //        ui.close_menu();
+                    //    }
+                    //}
+                    let response = ui.button("Configuration");
+
+                    if response.clicked() {
+                        self.config_open = true;
+                        self.gui_config.run_once = true;
+                        ui.close_menu();
+                    }
+
+                    if ui.button("Quit").clicked() {
+                        frame.close();
+                    }
+                });
             });
+        });
+    }
 
-        let config_open = &mut self.config_open.clone();
+    fn config_window(&mut self, ui: &mut egui::Ui) {
+        self.gui_config.model_list.get_listing_ui(ui);
+        //self.gui_config.requests_ui(ui);
+    }
 
-        egui::Window::new("Configuration")
-            .frame(frame)
-            .constrain(true)
-            .fixed_size(egui::Vec2::new(260.0, 200.0))
-            .collapsible(false)
-            .open(config_open)
-            .show(ctx, |ui| {
-            });
+    fn scrolling_window(&mut self, ui: &mut egui::Ui) {
+        let text_style = egui::TextStyle::Body;
+        let scroll_height = partial_min_max::max(ui.available_height() - 54.0, 0.0);
+        let row_height = ui.text_style_height(&text_style);
 
-        self.config_open = *config_open;
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .stick_to_bottom(true)
+            .max_height(scroll_height)
+            .show_rows(
+                ui,
+                row_height,
+                self.scroll_buffer.size(),
+                |ui, row_range| {
+                    for row in row_range {
+                        ui.label(self.scroll_buffer.internal[row].clone());
+                    }
+                },
+            );
+        ui.add_space(4.0);
+        ui.separator();
+        ui.add_space(4.0);
+
+        ui.horizontal_top(|ui| {
+            ui.label("> ");
+
+            let response = ui
+                .add(
+                    egui::TextEdit::singleline(&mut self.scroll_buffer.flush)
+                        .desired_width(partial_min_max::max(ui.available_width() - 70.0, 0.0)),
+                )
+                .on_hover_text_at_pointer("Enter Text");
+
+            //if !&self.config_open {
+            //    response.request_focus();
+            //}
+
+            if ui.button("Enter").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                self.scroll_buffer
+                    .flush_buffer()
+                    .expect("Something went wrong with the scroll buffer");
+
+                //if !&self.config_open {
+                //    response.request_focus();
+                //}
+            }
+        });
+
+         ui.add_space(10.0);
     }
 
     fn main_window(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -209,53 +301,47 @@ impl ChatGui {
 
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             ui.visuals_mut().override_text_color = Some(Color32::WHITE);
+            //self.title_bar(ui);
+
+            let mut title = LayoutJob::default();
+
+            title.append(
+                "📄 Main",
+                0.0,
+                epaint::text::TextFormat {
+                    font_id: FontId::new(20.0, FontFamily::Proportional),
+                    ..Default::default()
+                },
+            );
+
+            let mut config= LayoutJob::default();
+
+            config.append(
+                "💾 Config",
+                0.0,
+                epaint::text::TextFormat {
+                    font_id: FontId::new(20.0, FontFamily::Proportional),
+                    ..Default::default()
+                },
+            );
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                // Main Window 
+                ui.selectable_value(&mut self.view, View::Main, title);
+                ui.separator();
+                // Config
+                ui.selectable_value(&mut self.view, View::Config, config); 
+            });
+
+            ui.separator();
             ui.add_space(10.0);
 
-            let text_style = egui::TextStyle::Body;
-            let scroll_height = partial_min_max::max(ui.available_height() - 54.0, 0.0);
-            let row_height = ui.text_style_height(&text_style);
-
-            egui::ScrollArea::vertical()
-                .auto_shrink([false; 2])
-                .stick_to_bottom(true)
-                .max_height(scroll_height)
-                .show_rows(
-                    ui,
-                    row_height,
-                    self.scroll_buffer.size(),
-                    |ui, row_range| {
-                        for row in row_range {
-                            ui.label(self.scroll_buffer.internal[row].clone());
-                        }
-                    },
-                );
-                ui.add_space(4.0);
-                ui.separator();
-                ui.add_space(4.0);
-    
-                ui.horizontal_top(|ui| {
-                    ui.label("> ");
-    
-                    let response = ui.add(egui::TextEdit::singleline(&mut self.scroll_buffer.flush)
-                        .desired_width(partial_min_max::max(ui.available_width()-70.0, 0.0)))
-                        .on_hover_text_at_pointer("Read if gay");
-    
-                    if !&self.config_open {
-                        response.request_focus();
-                    }
-    
-                    if ui.button("Enter").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        self.scroll_buffer.flush_buffer();
-
-                        if !&self.config_open {
-                            response.request_focus();
-                        }
-                    }
-                });
-    
-                ui.add_space(10.0);
+            match self.view {
+                View::Main => self.scrolling_window(ui),
+                View::Config => self.config_window(ui), 
             }
-        );
+        });
     }
 
     fn check_errors(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {}

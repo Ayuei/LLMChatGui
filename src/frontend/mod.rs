@@ -1,3 +1,3 @@
 pub mod gui;
-pub mod requests;
 pub mod text;
+pub mod panels;

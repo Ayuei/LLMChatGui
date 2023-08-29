@@ -1,10 +1,11 @@
 use llm;
-use log::info;
 use rand::SeedableRng;
-use std::{collections::HashSet, io::Write};
+use std::collections::HashSet;
 
 use serenity::model::prelude::{Message, MessageId};
 use thiserror::Error;
+
+use crate::frontend::panels::config::GuiPrompt;
 
 #[derive(Debug, Error, Clone)]
 pub enum GenerationError {
@@ -49,6 +50,21 @@ impl Request {
 
         Request {
             message_id: msg.id,
+            prompt: prompt_str,
+            tok_stream_tx: sender,
+        }
+    }
+
+    pub fn from_prompt(prompt: GuiPrompt, sender: flume::Sender<Token>) -> Request {
+        let prompt_str = format!("{system_prompt}### User: {user_prompt}\n\n### Assistant:\n",
+            system_prompt=prompt.system_prompt,
+            user_prompt=prompt.prompt_template,
+        );
+
+        println!("PROMPT: {}", prompt_str);
+
+        Request {
+            message_id: GuiPrompt::default_id(),
             prompt: prompt_str,
             tok_stream_tx: sender,
         }
