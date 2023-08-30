@@ -16,7 +16,7 @@ use ChatBotGui::frontend::gui::ChatGui;
 //    let framework = StandardFramework::new().configure(|c| c.prefix("!"));
 //    let intents = GatewayIntents::default();
 //
-//    let mut client = Client::builder("MTEzNTE5MjMxMzAxNTA0MjIyOQ.GowBGz.zypLJ9uf2IWv4tnEo2NcDWCu6_nzRj2s1suxoQ", intents)
+//    let mut client = Client::builder("", intents)
 //        .framework(framework)
 //        .event_handler(Handler::new(model))
 //        .await?;
